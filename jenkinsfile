@@ -1,0 +1,68 @@
+pipeline{
+    agent None
+    tools{
+        mvn
+        java
+    }
+    parameters{
+        string(name: 'DEPLOY_ENV', defaultValue: 'amy', description: 'sandbox environment only')
+        booleanParam(name: 'execute_tests', defaultValue: true, description: '')
+        choice(name: 'appversion', choices: ['1.1', '1.2', '1.3'], description: '')
+    }
+    environment{
+        build_server=ec2-user@
+    }
+    stages{
+        stage('compiling the code'){
+            agent any
+            steps{
+                echo 'compiling the code in amy environment'
+                sh 'mvn compile'  //here comile is lifecycle
+            }
+        }
+
+        stage('Code review stage'){
+            agent any
+            echo 'doing code review using maven'
+            sh 'mvn pmd:pmd' //here pmd is a plugin.
+        }  
+
+        stage('testing the code'){
+            agent any
+            when{
+                expression{
+                    ${params.execute_tests}==true
+                }
+            }
+            steps{
+                echo "testing the code"
+                sh 'mvn test'
+            }
+
+        post{
+                always{
+                    junit 'target/surefire-reports/*.xml'
+                }
+            }
+
+        stage('Jacoco code coverage'){   //it checks how much part of code is checked by provided testcases. we have used mvn verify it is written in plugin i.e pom.xml that way
+            agent any
+            steps{
+                echo "it is mentioned in pom.xml se we use mvn verify"
+                sh 'mvn verify' 
+            }
+        }
+        stage ('Packaging'){
+            script{
+                sshagent(['agent2']){
+                    echo 'using agent2 here'
+                    sh 'scp -o stricth server_script.sh ${build_server}:/home/ec2-user' 
+                    sh 'ssh ${build_server} "bash ~/server_script.sh'
+                }
+            }
+        }
+        }
+    }
+
+
+}
